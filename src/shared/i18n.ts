@@ -20,10 +20,11 @@ export interface SystemOneStrings {
 	langChanged: (lang: string) => string;
 	statsReset: string;
 	testRunning: string;
-	testResult: (choice: string, confidence: number, durationMs: number, costUsd: number) => string;
+	testToolsResult: (primary: string, supporting: string | undefined, confidence: number, durationMs: number, costUsd: number) => string;
+	testNoTools: (confidence: number, durationMs: number, costUsd: number) => string;
 	testError: (error: string) => string;
 	noClassifierFound: string;
-	routeNotification: (domain: string, confidence: number, durationMs: number) => string;
+	routeNotification: (primary: string, supporting: string | undefined, confidence: number, durationMs: number) => string;
 	cmdDesc: {
 		root: string;
 		status: string;
@@ -33,6 +34,10 @@ export interface SystemOneStrings {
 		stats: string;
 		lang: string;
 	};
+}
+
+function formatToolChain(primary: string, supporting: string | undefined): string {
+	return supporting ? `${primary} → ${supporting}` : primary;
 }
 
 const STRINGS: Record<Locale, SystemOneStrings> = {
@@ -48,18 +53,21 @@ const STRINGS: Record<Locale, SystemOneStrings> = {
 		notifyToggled: (on) => `Pre-flight notifications: ${on ? "ON" : "OFF"}`,
 		langChanged: (lang) => `Language changed to: ${lang}`,
 		statsReset: "System One statistics have been reset.",
-		testRunning: "Running test decision via System One classifier...",
-		testResult: (choice, conf, ms, cost) =>
-			`🎯 Result: ${choice} (${(conf * 100).toFixed(0)}% conf) in ${ms}ms [Cost: $${cost.toFixed(5)}]`,
+		testRunning: "Running live tool-routing test via System One classifier...",
+		testToolsResult: (primary, supporting, conf, ms, cost) =>
+			`🎯 Tool routing: ${formatToolChain(primary, supporting)} (${(conf * 100).toFixed(0)}% conf) in ${ms}ms [Cost: $${cost.toFixed(5)}]`,
+		testNoTools: (conf, ms, cost) =>
+			`🎯 No tool needed — direct answer (${(conf * 100).toFixed(0)}% conf) in ${ms}ms [Cost: $${cost.toFixed(5)}]`,
 		testError: (err) => `❌ Classification failed: ${err}`,
 		noClassifierFound: "No supported System One classifier found. Ensure OpenRouter or TypeSafe credentials are configured.",
-		routeNotification: (domain, conf, ms) => `⚖️ System One: ${domain} (${(conf * 100).toFixed(0)}%) [${ms}ms]`,
+		routeNotification: (primary, supporting, conf, ms) =>
+			`⚖️ System One: ${formatToolChain(primary, supporting)} (${(conf * 100).toFixed(0)}%) [${ms}ms]`,
 		cmdDesc: {
 			root: "System One intelligent classifier and router",
 			status: "Show current status, model, and decision statistics",
 			mode: "Set routing mode (auto | manual | off)",
 			notify: "Toggle pre-flight popup notifications (on | off)",
-			test: "Run a live test classification against a prompt",
+			test: "Run a live tool-routing test classification against a prompt",
 			stats: "Manage decision statistics (reset)",
 			lang: "Switch UI language (en | cs)",
 		},
@@ -76,18 +84,21 @@ const STRINGS: Record<Locale, SystemOneStrings> = {
 		notifyToggled: (on) => `Pre-flight notifikace: ${on ? "ZAPNUTO" : "VYPNUTO"}`,
 		langChanged: (lang) => `Jazyk rozhraní změněn na: ${lang}`,
 		statsReset: "Statistiky System One byly resetovány.",
-		testRunning: "Spouštím testovací klasifikaci přes System One...",
-		testResult: (choice, conf, ms, cost) =>
-			`🎯 Výsledek: ${choice} (${(conf * 100).toFixed(0)}% jistota) za ${ms}ms [Cena: $${cost.toFixed(5)}]`,
+		testRunning: "Spouštím živý test směrování nástrojů přes System One...",
+		testToolsResult: (primary, supporting, conf, ms, cost) =>
+			`🎯 Směrování nástrojů: ${formatToolChain(primary, supporting)} (${(conf * 100).toFixed(0)}% jistota) za ${ms}ms [Cena: $${cost.toFixed(5)}]`,
+		testNoTools: (conf, ms, cost) =>
+			`🎯 Není potřeba nástroj — přímá odpověď (${(conf * 100).toFixed(0)}% jistota) za ${ms}ms [Cena: $${cost.toFixed(5)}]`,
 		testError: (err) => `❌ Klasifikace selhala: ${err}`,
 		noClassifierFound: "Nebyl nalezen žádný podporovaný klasifikátor. Zkontrolujte OpenRouter nebo TypeSafe přihlášení.",
-		routeNotification: (domain, conf, ms) => `⚖️ System One: ${domain} (${(conf * 100).toFixed(0)}%) [${ms}ms]`,
+		routeNotification: (primary, supporting, conf, ms) =>
+			`⚖️ System One: ${formatToolChain(primary, supporting)} (${(conf * 100).toFixed(0)}%) [${ms}ms]`,
 		cmdDesc: {
 			root: "Inteligentní klasifikátor a router System One",
 			status: "Zobrazit aktuální stav, model a statistiky rozhodování",
 			mode: "Nastavit režim směrování (auto | manual | off)",
 			notify: "Přepnout vyskakovací notifikace před během (on | off)",
-			test: "Spustit okamžitý test klasifikace na zadaném promptu",
+			test: "Spustit živý test směrování nástrojů na zadaném promptu",
 			stats: "Správa statistik rozhodování (reset)",
 			lang: "Změnit jazyk rozhraní (en | cs)",
 		},

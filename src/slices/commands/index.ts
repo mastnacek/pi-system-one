@@ -5,9 +5,10 @@
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { classifyPromptStrategy } from "../../shared/classifier.js";
-import { LOCALES, normalizeLocale, stringsFor, type Locale } from "../../shared/i18n.js";
+import { classifyToolSelection } from "../../shared/classifier.js";
+import { LOCALES, normalizeLocale, stringsFor } from "../../shared/i18n.js";
 import type { PluginState } from "../../shared/state.js";
+import { collectToolCandidates } from "../../shared/tool-candidates.js";
 import type { RoutingMode } from "../../shared/types.js";
 
 const MODES: readonly RoutingMode[] = ["auto", "manual", "off"] as const;
@@ -93,18 +94,32 @@ export function registerCommands(pi: ExtensionAPI, state: PluginState): void {
 			if (ctx.hasUI) ctx.ui.notify(s.testRunning, "info");
 
 			try {
-				const route = await classifyPromptStrategy(ctx.modelRegistry, state.config, testPrompt);
-				if (!route) {
+				const tools = collectToolCandidates(pi);
+				const selection = await classifyToolSelection(ctx.modelRegistry, state.config, testPrompt, tools);
+				if (!selection) {
 					if (ctx.hasUI) ctx.ui.notify(s.noClassifierFound, "error");
 					return;
 				}
 
-				state.recordClassification(route.metric, route.domain, route.confidence);
+				state.recordClassification(selection.metric, selection.primaryTool, selection.confidence);
 				if (ctx.hasUI) {
-					ctx.ui.notify(
-						s.testResult(route.domain, route.confidence, route.metric.durationMs, route.metric.costUsd),
-						"info",
-					);
+					if (!selection.needsTools || !selection.primaryTool) {
+						ctx.ui.notify(
+							s.testNoTools(selection.confidence, selection.metric.durationMs, selection.metric.costUsd),
+							"info",
+						);
+					} else {
+						ctx.ui.notify(
+							s.testToolsResult(
+								selection.primaryTool,
+								selection.supportingTool,
+								selection.confidence,
+								selection.metric.durationMs,
+								selection.metric.costUsd,
+							),
+							"info",
+						);
+					}
 				}
 			} catch (err: any) {
 				if (ctx.hasUI) ctx.ui.notify(s.testError(err?.message || String(err)), "error");

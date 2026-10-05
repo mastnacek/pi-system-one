@@ -16,10 +16,13 @@ test("every locale has a complete string table", () => {
 		assert.equal(typeof s.langChanged("cs"), "string");
 		assert.equal(typeof s.statsReset, "string");
 		assert.equal(typeof s.testRunning, "string");
-		assert.equal(typeof s.testResult("code_search", 0.9, 200, 0.0001), "string");
+		assert.equal(typeof s.testToolsResult("kb_search", "read", 0.9, 200, 0.0001), "string");
+		assert.equal(typeof s.testToolsResult("kb_search", undefined, 0.9, 200, 0.0001), "string");
+		assert.equal(typeof s.testNoTools(0.9, 200, 0.0001), "string");
 		assert.equal(typeof s.testError("failed"), "string");
 		assert.equal(typeof s.noClassifierFound, "string");
-		assert.equal(typeof s.routeNotification("code_search", 0.85, 220), "string");
+		assert.equal(typeof s.routeNotification("kb_search", "read", 0.85, 220), "string");
+		assert.equal(typeof s.routeNotification("kb_search", undefined, 0.85, 220), "string");
 
 		assert.equal(typeof s.cmdDesc.root, "string");
 		assert.equal(typeof s.cmdDesc.status, "string");

@@ -1,25 +1,29 @@
 /**
  * Pre-flight slice for pi-system-one.
- * Intercepts incoming user prompts, evaluates strategy with JEV/System One,
- * and seamlessly injects domain advisory guidance into the system prompt.
+ * Intercepts incoming user prompts, hands the session's ACTIVE TOOL LIST to the
+ * System One classifier (JEV/Clef), and injects the classifier's concrete tool
+ * selection into the system prompt — the main model executes the decision,
+ * it does not make it.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { classifyPromptStrategy } from "../../shared/classifier.js";
+import { classifyToolSelection } from "../../shared/classifier.js";
 import { stringsFor } from "../../shared/i18n.js";
 import type { PluginState } from "../../shared/state.js";
+import { collectToolCandidates } from "../../shared/tool-candidates.js";
 
-const DOMAIN_GUIDELINES: Record<string, string> = {
-	lotusscript: "System One: LotusScript/Domino detected. Prioritize LotusScript modular tools, check gotchas, and verify 300-line limits.",
-	pi_plugin_dev: "System One: Pi plugin development detected. Follow VSA architecture, string tables, and typebox schemas.",
-	herdr_plugin_dev: "System One: Herdr plugin task detected. Follow Herdr VSA conventions and validate manifests.",
-	code_navigation: "System One: Code search task detected. Use symbol_search, ast-grep, or LSP navigation for accurate locating.",
-	file_editing: "System One: File mutation task detected. Read target context before editing, use exact replacement.",
-	bash_shell: "System One: Shell/terminal task detected. Use bash execution and inspect exit codes.",
-	web_research: "System One: Web research task detected. Use web_search or google_search for current information.",
-	spai_backlog: "System One: SPAI task management detected. Use record_spai_item, update_spai_status, or search_spai_items.",
-	general_conversation: "System One: High-level architectural discussion or explanation.",
-};
+/**
+ * Build the model-facing guideline carrying System One's tool decision.
+ * Model-facing text stays English in all locales (see references/multilingual-ui.md).
+ */
+function buildRoutingGuideline(primaryTool: string, supportingTool: string | undefined, confidence: number): string {
+	const chain = supportingTool ? `\`${primaryTool}\` first, then \`${supportingTool}\`` : `\`${primaryTool}\``;
+	return (
+		`System One tool routing (classifier confidence ${(confidence * 100).toFixed(0)}%): ` +
+		`call ${chain}. This tool was selected by the System One classifier from the session's ` +
+		`active tool list as the best match for the user's request — prefer it before considering alternatives.`
+	);
+}
 
 export function registerPreflight(pi: ExtensionAPI, state: PluginState): () => void {
 	const unsubscribe = pi.on("before_agent_start", async (event, ctx) => {
@@ -33,30 +37,45 @@ export function registerPreflight(pi: ExtensionAPI, state: PluginState): () => v
 			return;
 		}
 
+		// The session's live tool list is the routing candidate set.
+		const tools = collectToolCandidates(pi);
+		if (tools.length === 0) {
+			return;
+		}
+
 		try {
-			const route = await classifyPromptStrategy(ctx.modelRegistry, state.config, trimmed);
-			if (!route) return;
+			const selection = await classifyToolSelection(ctx.modelRegistry, state.config, trimmed, tools);
+			if (!selection) return;
 
-			state.recordClassification(route.metric, route.domain, route.confidence);
+			state.recordClassification(selection.metric, selection.primaryTool, selection.confidence);
 
-			// Check confidence threshold
-			if (route.confidence >= state.config.confidenceThreshold) {
-				const s = stringsFor(state.config.lang);
-
-				// 1. Show UI notification if enabled
-				if (state.config.showNotification && ctx.hasUI) {
-					ctx.ui.notify(
-						s.routeNotification(route.domain, route.confidence, route.metric.durationMs),
-						"info",
-					);
-				}
-
-				// 2. Append domain guidance to system prompt guidelines
-				const guideline = DOMAIN_GUIDELINES[route.domain] || `System One Strategy: '${route.domain}' recommended.`;
-				if (event.systemPromptOptions?.promptGuidelines) {
-					event.systemPromptOptions.promptGuidelines.push(guideline);
-				}
+			// No tool needed, or the decision is not confident enough — leave the turn untouched.
+			if (!selection.needsTools || !selection.primaryTool) {
+				return;
 			}
+			if (selection.confidence < state.config.confidenceThreshold) {
+				return;
+			}
+
+			const s = stringsFor(state.config.lang);
+
+			// 1. Show UI notification if enabled
+			if (state.config.showNotification && ctx.hasUI) {
+				ctx.ui.notify(
+					s.routeNotification(
+						selection.primaryTool,
+						selection.supportingTool,
+						selection.confidence,
+						selection.metric.durationMs,
+					),
+					"info",
+				);
+			}
+
+			// 2. Inject the concrete tool selection into the system prompt guidelines
+			event.systemPromptOptions.promptGuidelines.push(
+				buildRoutingGuideline(selection.primaryTool, selection.supportingTool, selection.confidence),
+			);
 		} catch (err) {
 			// Preflight failure must never block or crash the agent turn
 			console.warn("pi-system-one preflight classification failed:", err);

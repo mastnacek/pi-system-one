@@ -8,8 +8,8 @@
 
 Large Language Models (System Two) excel at deep reasoning and conversation, but are slow and expensive for simple decisions. **`pi-system-one`** integrates ultra-fast, non-conversational **System One classifier models** (such as *TypeSafe JEV* and *Cloudflare Clef*) directly into Pi coding agent:
 
-1. 🚀 **Pre-Flight Strategy Routing (`before_agent_start`):**
-   Evaluates incoming user prompts in **~200ms** to identify the best tool domain (e.g. LotusScript, Code Search, File Editing, SPAI, Shell, Web Research) and automatically injects guidance into the system prompt.
+1. 🚀 **Pre-Flight Tool Routing (`before_agent_start`):**
+   Reads the session's **live active tool list** (`pi.getAllTools()` ∩ `pi.getActiveTools()`), hands it to the classifier as choice criteria, and in **~200ms** decides *which concrete tool* the agent should call first (plus an optional supporting tool). The decision — not a vague hint — is injected into the system prompt guidelines, so the main model never selects tools itself.
 2. 🛠️ **Autonomous Classifier Tools:**
    Exposes high-speed tools for the agent:
    - `system_one_classify` — evaluate arbitrary JSON state against boolean, categorical, or ordinal questions.
@@ -46,7 +46,7 @@ pi install git:github.com/mastnacek/pi-system-one
 | `/system-one status` | View current routing mode, active classifier model, and performance statistics |
 | `/system-one mode <auto\|manual\|off> [--global]` | Set routing mode (`auto` evaluates every prompt; `manual` tools only) |
 | `/system-one notify <on\|off> [--global]` | Toggle popup notifications for pre-flight routing |
-| `/system-one test <prompt>` | Test live classification and measure response time and cost |
+| `/system-one test <prompt>` | Run live tool routing against the session's tool list; shows the selected tool chain, confidence, response time, and cost |
 | `/system-one stats reset` | Reset classification count, latency, and spend statistics |
 | `/system-one lang <en\|cs> [--global]` | Switch UI language |
 
@@ -101,13 +101,31 @@ Built following **Vertical Slice Architecture (VSA)**:
 pi-system-one/
 ├── index.ts                # Composition root (lifecycle, subagent guard)
 ├── src/
-│   ├── shared/             # Kernel: types, state, config cascade, i18n, classifier client
+│   ├── shared/             # Kernel: types, state, config cascade, i18n, classifier client, tool candidates
 │   └── slices/
-│       ├── preflight/      # before_agent_start strategy router
+│       ├── preflight/      # before_agent_start tool router (active tool list → classifier → guideline)
 │       ├── tools/          # system_one_* agent tools
 │       └── commands/       # /system-one & /s1 slash command handlers
 └── test/                   # Automated unit tests
 ```
+
+### How pre-flight routing works
+
+```
+user prompt
+  → collectToolCandidates(pi)          # getAllTools() ∩ getActiveTools(), minus system_one_*
+  → classifyToolSelection(...)         # one classifier call, three questions:
+  │     needs_tools     (bool)         #   is any tool call needed at all?
+  │     primary_tool    (choice)       #   which tool to call FIRST (+ answer_directly sentinel)
+  │     supporting_tool (choice)       #   complementary second tool (+ none sentinel)
+  → if confident (≥ confidenceThreshold):
+        systemPromptOptions.promptGuidelines.push(
+          "System One tool routing: call `kb_search` first, then `read` …")
+        + optional UI notification
+```
+
+Sentinel choices (`answer_directly`, `none`) let the classifier explicitly decline tool use,
+so conversational prompts are left untouched.
 
 ---
 

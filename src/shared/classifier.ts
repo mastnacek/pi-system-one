@@ -1,23 +1,15 @@
 /**
  * High-performance System One classifier wrapper for JEV, Clef, and Tev1.
  * Resolves models, formats criteria, measures duration/cost, and handles fallbacks.
+ *
+ * The core routing primitive is `classifyToolSelection`: it hands the session's
+ * active tool list to the classifier as choice criteria, so System One — not the
+ * main model — decides which tool fits the user's request.
  */
 
 import type { ClassifierContext, ClassifierModel, ClassifierResult } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
-import type { ClassificationMetric, StrategyRouteResult, SystemOneConfig } from "./types.js";
-
-export const DEFAULT_DOMAINS: Record<string, string> = {
-	lotusscript: "LotusScript, Domino 9.0.1, DXL, Notes databases, agent decompilation/compilation, views, formulas",
-	pi_plugin_dev: "Developing Pi coding agent plugins, extensions, skills, slash commands, TUI, or VSA architecture",
-	herdr_plugin_dev: "Herdr multiplexer plugin development in Rust/Ratatui, manifest validation, herdr scaffolding",
-	code_navigation: "Semantic code search, LSP definitions, symbol search, ast-grep queries, exploring unfamiliar codebases",
-	file_editing: "Editing existing code files, precise text replacements, creating new source code files, refactoring",
-	bash_shell: "Executing shell commands, git operations, file system checks, running builds, linters, or test suites",
-	web_research: "Searching the live web for recent documentation, API changes, news, or external technical docs",
-	spai_backlog: "Managing project tasks, backlog items, SPAI syntax, notes, ideas, todo/working/done lifecycle",
-	general_conversation: "General software discussion, explaining concepts, architectural design, answering high-level questions",
-};
+import type { ClassificationMetric, SystemOneConfig, ToolCandidate, ToolSelectionResult } from "./types.js";
 
 const CLASSIFIER_FALLBACKS = [
 	{ provider: "openrouter", model: "typesafe/jev-1.13" },
@@ -29,6 +21,11 @@ const CLASSIFIER_FALLBACKS = [
 	{ provider: "openrouter", model: "cloudflare/clef" },
 	{ provider: "cloudflare-workers-ai", model: "typesafe/jev" },
 ];
+
+/** Sentinel choice key: the classifier decides no tool is needed. */
+export const NO_TOOL_KEY = "answer_directly";
+/** Sentinel choice key: no complementary tool is needed. */
+export const NO_SUPPORTING_TOOL_KEY = "none";
 
 export function findClassifier(
 	registry: ModelRegistry,
@@ -74,20 +71,60 @@ export async function runClassification(
 	return { result, metric };
 }
 
-export async function classifyPromptStrategy(
+/**
+ * Route a user prompt to the session's tools. The classifier receives the prompt as
+ * state and the active tool list as choice criteria, then answers three questions in
+ * one call: whether a tool is needed at all, which tool to call first, and which
+ * second tool complements it.
+ *
+ * Returns undefined when no tools are offered or the classifier did not stop cleanly.
+ */
+export async function classifyToolSelection(
 	registry: ModelRegistry,
 	config: SystemOneConfig,
 	prompt: string,
+	tools: ToolCandidate[],
 	signal?: AbortSignal,
-): Promise<StrategyRouteResult | undefined> {
-	const domains = config.domainStrategies ?? DEFAULT_DOMAINS;
+): Promise<ToolSelectionResult | undefined> {
+	if (tools.length === 0) {
+		return undefined;
+	}
+
+	const toolCriteria: Record<string, string> = {};
+	for (const tool of tools) {
+		toolCriteria[tool.name] = tool.description;
+	}
+
 	const context: ClassifierContext = {
 		state: { prompt: prompt.slice(0, 16_000) },
 		questions: {
-			domain: {
+			needs_tools: {
+				type: "bool",
+				instructions: "Does fulfilling this user request require calling at least one of the available tools?",
+				criteria: {
+					true: "At least one tool call is needed to fulfill the request (read data, search, edit, run commands)",
+					false: "The request can be answered directly from knowledge without any tool call",
+				},
+			},
+			primary_tool: {
 				type: "choice",
-				instructions: "Which domain or toolset is most appropriate for handling the user's prompt?",
-				criteria: domains,
+				instructions:
+					"Which single tool should the coding agent call FIRST to best fulfill the user's request? " +
+					`Choose ${NO_TOOL_KEY} only when no listed tool is useful for this request.`,
+				criteria: {
+					[NO_TOOL_KEY]: "No tool is needed; answer directly from knowledge",
+					...toolCriteria,
+				},
+			},
+			supporting_tool: {
+				type: "choice",
+				instructions:
+					"Which second tool best complements the primary tool for this request (e.g. reading docs before editing)? " +
+					`Choose ${NO_SUPPORTING_TOOL_KEY} when the primary tool alone suffices.`,
+				criteria: {
+					[NO_SUPPORTING_TOOL_KEY]: "No supporting tool is needed",
+					...toolCriteria,
+				},
 			},
 		},
 	};
@@ -97,15 +134,27 @@ export async function classifyPromptStrategy(
 		return undefined;
 	}
 
-	const answer = result.answers.domain;
-	if (answer.type !== "choice") {
-		return undefined;
-	}
+	const needs = result.answers.needs_tools;
+	const primary = result.answers.primary_tool;
+	const supporting = result.answers.supporting_tool;
+
+	const needsTools = needs?.type === "bool" ? needs.probability >= 0.5 : true;
+	const primaryTool =
+		primary?.type === "choice" && primary.choice !== NO_TOOL_KEY ? primary.choice : undefined;
+	const confidence = primary?.type === "choice" ? primary.confidence : 0;
+	const supportingTool =
+		supporting?.type === "choice" &&
+		supporting.choice !== NO_SUPPORTING_TOOL_KEY &&
+		supporting.choice !== primaryTool
+			? supporting.choice
+			: undefined;
 
 	return {
-		domain: answer.choice,
-		confidence: answer.confidence,
-		probabilities: answer.probabilities,
+		needsTools,
+		primaryTool,
+		supportingTool,
+		confidence,
+		probabilities: primary?.type === "choice" ? primary.probabilities : {},
 		metric,
 	};
 }

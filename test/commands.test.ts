@@ -13,6 +13,15 @@ function createMockExtensionAPI() {
 		registerCommand(name: string, def: any) {
 			commands.set(name, def);
 		},
+		getActiveTools() {
+			return ["kb_search", "read"];
+		},
+		getAllTools() {
+			return [
+				{ name: "kb_search", description: "Hybrid search over the knowledge base" },
+				{ name: "read", description: "Read file contents" },
+			];
+		},
 	} as unknown as ExtensionAPI;
 
 	return { api, commands };
@@ -40,11 +49,18 @@ function createMockCommandContext(notifyMessages: string[] = [], cwd: string = p
 					provider: "openrouter",
 					model: "typesafe/jev-1.13",
 					answers: {
-						domain: {
+						needs_tools: { type: "bool", probability: 0.97 },
+						primary_tool: {
 							type: "choice",
-							choice: "code_navigation",
+							choice: "kb_search",
 							confidence: 0.9,
-							probabilities: { code_navigation: 0.9 },
+							probabilities: { kb_search: 0.9 },
+						},
+						supporting_tool: {
+							type: "choice",
+							choice: "read",
+							confidence: 0.8,
+							probabilities: { read: 0.8 },
 						},
 					},
 					stopReason: "stop",
@@ -140,7 +156,8 @@ test("/system-one test runs test prompt", async () => {
 	const cmd = commands.get("system-one");
 
 	await cmd.handler("test search for authentication symbol", ctx);
-	assert.ok(notifications.some((n) => n.includes("code_navigation")));
+	assert.ok(notifications.some((n) => n.includes("kb_search")));
+	assert.ok(notifications.some((n) => n.includes("read")));
 	fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
