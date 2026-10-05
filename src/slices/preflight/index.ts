@@ -4,13 +4,18 @@
  * System One classifier (JEV/Clef), and injects the classifier's concrete tool
  * selection into the system prompt — the main model executes the decision,
  * it does not make it.
+ *
+ * When the debug HUD is enabled (/system-one debug on), every round-trip —
+ * including skipped and failed ones — is published to the widget above the editor.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { classifyToolSelection } from "../../shared/classifier.js";
+import { publishDebugHud, snapshotFromError, snapshotFromSelection } from "../../shared/debug-hud.js";
 import { stringsFor } from "../../shared/i18n.js";
 import type { PluginState } from "../../shared/state.js";
 import { collectToolCandidates } from "../../shared/tool-candidates.js";
+import type { DebugSnapshot } from "../../shared/types.js";
 
 /**
  * Build the model-facing guideline carrying System One's tool decision.
@@ -39,21 +44,67 @@ export function registerPreflight(pi: ExtensionAPI, state: PluginState): () => v
 
 		// The session's live tool list is the routing candidate set.
 		const tools = collectToolCandidates(pi);
+
+		const publish = (snapshot: DebugSnapshot): void => {
+			state.lastDebug = snapshot;
+			if (state.config.debugHud) {
+				publishDebugHud(ctx, snapshot, state.config.lang);
+			}
+		};
+
 		if (tools.length === 0) {
+			publish({
+				source: "preflight",
+				timestamp: Date.now(),
+				prompt: trimmed,
+				candidateCount: 0,
+				candidateNames: [],
+				questionSummary: "-",
+				probabilities: {},
+				injected: false,
+				skipReason: "no-candidates",
+			});
 			return;
 		}
 
 		try {
 			const selection = await classifyToolSelection(ctx.modelRegistry, state.config, trimmed, tools);
-			if (!selection) return;
+			if (!selection) {
+				publish(
+					snapshotFromSelection(
+						"preflight",
+						trimmed,
+						tools,
+						{
+							needsTools: false,
+							needsToolsProbability: 0,
+							confidence: 0,
+							probabilities: {},
+							metric: { durationMs: 0, costUsd: 0, provider: "-", model: "-" },
+						},
+						false,
+						"classifier-unavailable",
+					),
+				);
+				return;
+			}
 
 			state.recordClassification(selection.metric, selection.primaryTool, selection.confidence);
 
-			// No tool needed, or the decision is not confident enough — leave the turn untouched.
+			// Decide whether the guideline is injected.
+			let injected = false;
+			let skipReason: DebugSnapshot["skipReason"];
 			if (!selection.needsTools || !selection.primaryTool) {
-				return;
+				skipReason = "no-tool-needed";
+			} else if (selection.confidence < state.config.confidenceThreshold) {
+				skipReason = "below-threshold";
+			} else {
+				injected = true;
 			}
-			if (selection.confidence < state.config.confidenceThreshold) {
+
+			publish(snapshotFromSelection("preflight", trimmed, tools, selection, injected, skipReason));
+
+			if (!injected || !selection.primaryTool) {
 				return;
 			}
 
@@ -77,8 +128,9 @@ export function registerPreflight(pi: ExtensionAPI, state: PluginState): () => v
 				buildRoutingGuideline(selection.primaryTool, selection.supportingTool, selection.confidence),
 			);
 		} catch (err) {
+			publish(snapshotFromError("preflight", trimmed, tools, err));
 			// Preflight failure must never block or crash the agent turn
-			console.warn("pi-system-one preflight classification failed:", err);
+			console.error("pi-system-one preflight classification failed:", err);
 		}
 	});
 

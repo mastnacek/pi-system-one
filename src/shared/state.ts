@@ -4,11 +4,13 @@
  */
 
 import { loadConfig, saveConfig } from "./config.js";
-import type { ClassificationMetric, SystemOneConfig, SystemOneStats } from "./types.js";
+import type { ClassificationMetric, DebugSnapshot, SystemOneConfig, SystemOneStats } from "./types.js";
 
 export interface PluginState {
 	config: SystemOneConfig;
 	stats: SystemOneStats;
+	/** The most recent classifier round-trip, captured for the debug HUD. */
+	lastDebug?: DebugSnapshot;
 	updateConfig(patch: Partial<SystemOneConfig>, isGlobal?: boolean, cwd?: string): void;
 	recordClassification(metric: ClassificationMetric, domain?: string, confidence?: number): void;
 	resetStats(): void;

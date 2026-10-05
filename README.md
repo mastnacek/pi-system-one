@@ -49,6 +49,7 @@ pi install git:github.com/mastnacek/pi-system-one
 | `/system-one test <prompt>` | Run live tool routing against the session's tool list; shows the selected tool chain, confidence, response time, and cost |
 | `/system-one stats reset` | Reset classification count, latency, and spend statistics |
 | `/system-one lang <en\|cs> [--global]` | Switch UI language |
+| `/system-one debug <on\|off> [--global]` | Toggle the debug HUD widget above the editor: shows exactly what is sent to the classifier (prompt, active tool list, questions) and what it answers (selection, probabilities, latency, cost, injection decision) |
 
 *(You can also use the shorthand `/s1` for all commands).*
 

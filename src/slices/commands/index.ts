@@ -6,6 +6,12 @@
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { classifyToolSelection } from "../../shared/classifier.js";
+import {
+	clearDebugHud,
+	publishDebugHud,
+	snapshotFromError,
+	snapshotFromSelection,
+} from "../../shared/debug-hud.js";
 import { LOCALES, normalizeLocale, stringsFor } from "../../shared/i18n.js";
 import type { PluginState } from "../../shared/state.js";
 import { collectToolCandidates } from "../../shared/tool-candidates.js";
@@ -41,7 +47,7 @@ export function registerCommands(pi: ExtensionAPI, state: PluginState): void {
 			const targetMode = tokens[1]?.toLowerCase() as RoutingMode | undefined;
 			if (!targetMode || !MODES.includes(targetMode)) {
 				if (ctx.hasUI) {
-					ctx.ui.notify(`Usage: /system-one mode <${MODES.join("|")}> [--global]`, "warning");
+					ctx.ui.notify(s.usageMode, "warning");
 				}
 				return;
 			}
@@ -53,12 +59,30 @@ export function registerCommands(pi: ExtensionAPI, state: PluginState): void {
 		if (sub === "notify") {
 			const target = tokens[1]?.toLowerCase();
 			if (target !== "on" && target !== "off") {
-				if (ctx.hasUI) ctx.ui.notify("Usage: /system-one notify <on|off> [--global]", "warning");
+				if (ctx.hasUI) ctx.ui.notify(s.usageNotify, "warning");
 				return;
 			}
 			const enabled = target === "on";
 			state.updateConfig({ showNotification: enabled }, isGlobal, ctx.cwd);
 			if (ctx.hasUI) ctx.ui.notify(s.notifyToggled(enabled) + (isGlobal ? " (global)" : ""), "info");
+			return;
+		}
+
+		if (sub === "debug") {
+			const target = tokens[1]?.toLowerCase();
+			if (target !== "on" && target !== "off") {
+				if (ctx.hasUI) ctx.ui.notify(s.usageDebug, "warning");
+				return;
+			}
+			const enabled = target === "on";
+			state.updateConfig({ debugHud: enabled }, isGlobal, ctx.cwd);
+			if (enabled) {
+				// Show the last round-trip immediately, if one exists.
+				if (state.lastDebug) publishDebugHud(ctx, state.lastDebug, state.config.lang);
+			} else {
+				clearDebugHud(ctx);
+			}
+			if (ctx.hasUI) ctx.ui.notify(s.debugToggled(enabled) + (isGlobal ? " (global)" : ""), "info");
 			return;
 		}
 
@@ -68,7 +92,7 @@ export function registerCommands(pi: ExtensionAPI, state: PluginState): void {
 				state.resetStats();
 				if (ctx.hasUI) ctx.ui.notify(s.statsReset, "info");
 			} else {
-				if (ctx.hasUI) ctx.ui.notify("Usage: /system-one stats reset", "warning");
+				if (ctx.hasUI) ctx.ui.notify(s.usageStats, "warning");
 			}
 			return;
 		}
@@ -77,7 +101,7 @@ export function registerCommands(pi: ExtensionAPI, state: PluginState): void {
 			const targetLang = tokens[1]?.toLowerCase();
 			if (!targetLang || !(LOCALES as readonly string[]).includes(targetLang)) {
 				if (ctx.hasUI) {
-					ctx.ui.notify(`Usage: /system-one lang <${LOCALES.join("|")}> [--global]`, "warning");
+					ctx.ui.notify(s.usageLang, "warning");
 				}
 				return;
 			}
@@ -102,6 +126,21 @@ export function registerCommands(pi: ExtensionAPI, state: PluginState): void {
 				}
 
 				state.recordClassification(selection.metric, selection.primaryTool, selection.confidence);
+
+				// Capture the round-trip for the debug HUD (test never injects guidelines).
+				const snapshot = snapshotFromSelection(
+					"test",
+					testPrompt,
+					tools,
+					selection,
+					false,
+					selection.needsTools && selection.primaryTool ? undefined : "no-tool-needed",
+				);
+				state.lastDebug = snapshot;
+				if (state.config.debugHud) {
+					publishDebugHud(ctx, snapshot, state.config.lang);
+				}
+
 				if (ctx.hasUI) {
 					if (!selection.needsTools || !selection.primaryTool) {
 						ctx.ui.notify(
@@ -122,6 +161,11 @@ export function registerCommands(pi: ExtensionAPI, state: PluginState): void {
 					}
 				}
 			} catch (err: any) {
+				const snapshot = snapshotFromError("test", testPrompt, collectToolCandidates(pi), err);
+				state.lastDebug = snapshot;
+				if (state.config.debugHud) {
+					publishDebugHud(ctx, snapshot, state.config.lang);
+				}
 				if (ctx.hasUI) ctx.ui.notify(s.testError(err?.message || String(err)), "error");
 			}
 			return;
@@ -129,16 +173,7 @@ export function registerCommands(pi: ExtensionAPI, state: PluginState): void {
 
 		// Fallback help
 		if (ctx.hasUI) {
-			ctx.ui.notify(
-				`System One Commands:\n` +
-					`• /system-one status\n` +
-					`• /system-one mode <auto|manual|off> [--global]\n` +
-					`• /system-one notify <on|off> [--global]\n` +
-					`• /system-one test <prompt>\n` +
-					`• /system-one stats reset\n` +
-					`• /system-one lang <en|cs> [--global]`,
-				"info",
-			);
+			ctx.ui.notify(s.helpText, "info");
 		}
 	};
 
@@ -206,6 +241,22 @@ function buildCompletions(
 		);
 	}
 
+	// 2nd level: debug
+	if (firstToken === "debug" && (trailingSpace || tokens.length > 1)) {
+		const typed = (tokens.length > 1 ? tokens.slice(1).join(" ") : "").toLowerCase();
+		const opts = ["on", "off"] as const;
+		return opts
+			.map((o) => {
+				const isActive = (o === "on" && state.config.debugHud) || (o === "off" && !state.config.debugHud);
+				return {
+					value: `debug ${o}`,
+					label: isActive ? `${o} ✓` : o,
+					description: `Debug HUD: ${o}${isActive ? " · ● AKTIVNÍ" : ""}`,
+				};
+			})
+			.filter((row) => row.value.toLowerCase().startsWith(`debug ${typed}`));
+	}
+
 	// 2nd level: lang
 	if (firstToken === "lang" && (trailingSpace || tokens.length > 1)) {
 		const typed = (tokens.length > 1 ? tokens.slice(1).join(" ") : "").toLowerCase();
@@ -230,6 +281,7 @@ function buildCompletions(
 		{ value: "test ", label: "test", description: s.cmdDesc.test },
 		{ value: "stats ", label: "stats", description: s.cmdDesc.stats },
 		{ value: "lang ", label: "lang", description: `${s.cmdDesc.lang} [${state.config.lang}]` },
+		{ value: "debug ", label: "debug", description: `${s.cmdDesc.debug} [${state.config.debugHud ? "on" : "off"}]` },
 	];
 
 	const filtered = rows.filter((r) => r.value.trim().toLowerCase().startsWith(typed));

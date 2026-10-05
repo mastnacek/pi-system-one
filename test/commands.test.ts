@@ -35,6 +35,9 @@ function createMockCommandContext(notifyMessages: string[] = [], cwd: string = p
 			notify(msg: string, type?: string) {
 				notifyMessages.push(msg);
 			},
+			setWidget(_key: string, _content: unknown, _options?: unknown) {
+				// no-op: widget rendering is outside unit-test scope
+			},
 		},
 		modelRegistry: {
 			findOfType() {
@@ -145,6 +148,24 @@ test("/system-one lang changes locale", async () => {
 	fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
+test("/system-one debug toggles the HUD flag and persists", async () => {
+	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-cmds-"));
+	const { api, commands } = createMockExtensionAPI();
+	const state = createInitialState(tmpDir);
+	registerCommands(api, state);
+
+	const notifications: string[] = [];
+	const ctx = createMockCommandContext(notifications, tmpDir);
+	const cmd = commands.get("system-one");
+
+	assert.equal(state.config.debugHud, false);
+	await cmd.handler("debug on", ctx);
+	assert.equal(state.config.debugHud, true);
+	await cmd.handler("debug off", ctx);
+	assert.equal(state.config.debugHud, false);
+	fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
 test("/system-one test runs test prompt", async () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-cmds-"));
 	const { api, commands } = createMockExtensionAPI();
@@ -158,6 +179,13 @@ test("/system-one test runs test prompt", async () => {
 	await cmd.handler("test search for authentication symbol", ctx);
 	assert.ok(notifications.some((n) => n.includes("kb_search")));
 	assert.ok(notifications.some((n) => n.includes("read")));
+
+	// The round-trip is captured for the debug HUD.
+	assert.ok(state.lastDebug);
+	assert.equal(state.lastDebug.source, "test");
+	assert.equal(state.lastDebug.primaryTool, "kb_search");
+	assert.equal(state.lastDebug.candidateCount, 2);
+	assert.deepEqual(state.lastDebug.candidateNames, ["kb_search", "read"]);
 	fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
@@ -190,6 +218,11 @@ test("argument completions close on free-form 'test ' inputs to allow Enter subm
 	// 5. "mode " returns mode options
 	const modeCompletions = cmd.getArgumentCompletions("mode ");
 	assert.ok(modeCompletions && modeCompletions.length === 3);
+
+	// 6. "debug " returns on/off with the active marker
+	const debugCompletions = cmd.getArgumentCompletions("debug ");
+	assert.ok(debugCompletions && debugCompletions.length === 2);
+	assert.ok(debugCompletions.some((row) => row.label === "off ✓"), "debug is off by default, marker on off");
 
 	fs.rmSync(tmpDir, { recursive: true, force: true });
 });

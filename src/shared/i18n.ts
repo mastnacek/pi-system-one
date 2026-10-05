@@ -25,6 +25,32 @@ export interface SystemOneStrings {
 	testError: (error: string) => string;
 	noClassifierFound: string;
 	routeNotification: (primary: string, supporting: string | undefined, confidence: number, durationMs: number) => string;
+	debugToggled: (on: boolean) => string;
+	usageMode: string;
+	usageNotify: string;
+	usageStats: string;
+	usageLang: string;
+	usageDebug: string;
+	helpText: string;
+	hud: {
+		title: string;
+		inPrompt: string;
+		inTools: string;
+		inQuestions: string;
+		out: string;
+		act: string;
+		needs: string;
+		primary: string;
+		support: string;
+		actionInjected: string;
+		actionInjectedNo: string;
+		actionSkippedNoTool: string;
+		actionSkippedThreshold: string;
+		actionSkippedNoClassifier: string;
+		actionSkippedNoCandidates: string;
+		actionError: string;
+		error: (message: string) => string;
+	};
 	cmdDesc: {
 		root: string;
 		status: string;
@@ -33,6 +59,7 @@ export interface SystemOneStrings {
 		test: string;
 		stats: string;
 		lang: string;
+		debug: string;
 	};
 }
 
@@ -62,6 +89,40 @@ const STRINGS: Record<Locale, SystemOneStrings> = {
 		noClassifierFound: "No supported System One classifier found. Ensure OpenRouter or TypeSafe credentials are configured.",
 		routeNotification: (primary, supporting, conf, ms) =>
 			`⚖️ System One: ${formatToolChain(primary, supporting)} (${(conf * 100).toFixed(0)}%) [${ms}ms]`,
+		debugToggled: (on) => `Debug HUD: ${on ? "ON" : "OFF"}`,
+		usageMode: "Usage: /system-one mode <auto|manual|off> [--global]",
+		usageNotify: "Usage: /system-one notify <on|off> [--global]",
+		usageStats: "Usage: /system-one stats reset",
+		usageLang: "Usage: /system-one lang <en|cs> [--global]",
+		usageDebug: "Usage: /system-one debug <on|off> [--global]",
+		helpText:
+			"System One Commands:\n" +
+			"• /system-one status\n" +
+			"• /system-one mode <auto|manual|off> [--global]\n" +
+			"• /system-one notify <on|off> [--global]\n" +
+			"• /system-one test <prompt>\n" +
+			"• /system-one stats reset\n" +
+			"• /system-one lang <en|cs> [--global]\n" +
+			"• /system-one debug <on|off> [--global]",
+		hud: {
+			title: "SYSTEM ONE DEBUG",
+			inPrompt: "IN  prompt",
+			inTools: "IN  tools",
+			inQuestions: "IN  questions",
+			out: "OUT",
+			act: "ACT",
+			needs: "needs",
+			primary: "primary",
+			support: "support",
+			actionInjected: "guideline injected ✓",
+			actionInjectedNo: "not injected",
+			actionSkippedNoTool: "skipped — no tool needed",
+			actionSkippedThreshold: "skipped — below confidence threshold",
+			actionSkippedNoClassifier: "skipped — classifier unavailable",
+			actionSkippedNoCandidates: "skipped — no active tools",
+			actionError: "classification failed",
+			error: (message) => `error: ${message}`,
+		},
 		cmdDesc: {
 			root: "System One intelligent classifier and router",
 			status: "Show current status, model, and decision statistics",
@@ -70,6 +131,7 @@ const STRINGS: Record<Locale, SystemOneStrings> = {
 			test: "Run a live tool-routing test classification against a prompt",
 			stats: "Manage decision statistics (reset)",
 			lang: "Switch UI language (en | cs)",
+			debug: "Toggle the debug HUD widget showing classifier input/output (on | off)",
 		},
 	},
 	cs: {
@@ -93,6 +155,40 @@ const STRINGS: Record<Locale, SystemOneStrings> = {
 		noClassifierFound: "Nebyl nalezen žádný podporovaný klasifikátor. Zkontrolujte OpenRouter nebo TypeSafe přihlášení.",
 		routeNotification: (primary, supporting, conf, ms) =>
 			`⚖️ System One: ${formatToolChain(primary, supporting)} (${(conf * 100).toFixed(0)}%) [${ms}ms]`,
+		debugToggled: (on) => `Debug HUD: ${on ? "ZAPNUTO" : "VYPNUTO"}`,
+		usageMode: "Použití: /system-one mode <auto|manual|off> [--global]",
+		usageNotify: "Použití: /system-one notify <on|off> [--global]",
+		usageStats: "Použití: /system-one stats reset",
+		usageLang: "Použití: /system-one lang <en|cs> [--global]",
+		usageDebug: "Použití: /system-one debug <on|off> [--global]",
+		helpText:
+			"Příkazy System One:\n" +
+			"• /system-one status\n" +
+			"• /system-one mode <auto|manual|off> [--global]\n" +
+			"• /system-one notify <on|off> [--global]\n" +
+			"• /system-one test <prompt>\n" +
+			"• /system-one stats reset\n" +
+			"• /system-one lang <en|cs> [--global]\n" +
+			"• /system-one debug <on|off> [--global]",
+		hud: {
+			title: "SYSTEM ONE DEBUG",
+			inPrompt: "IN  prompt",
+			inTools: "IN  nástroje",
+			inQuestions: "IN  otázky",
+			out: "OUT",
+			act: "AKCE",
+			needs: "potřeba",
+			primary: "primární",
+			support: "doplnkující",
+			actionInjected: "guideline vložena do promptu ✓",
+			actionInjectedNo: "nevloženo",
+			actionSkippedNoTool: "přeskočeno — nástroj netřeba",
+			actionSkippedThreshold: "přeskočeno — pod prahem jistoty",
+			actionSkippedNoClassifier: "přeskočeno — klasifikátor nedostupný",
+			actionSkippedNoCandidates: "přeskočeno — žádné aktivní nástroje",
+			actionError: "klasifikace selhala",
+			error: (message) => `chyba: ${message}`,
+		},
 		cmdDesc: {
 			root: "Inteligentní klasifikátor a router System One",
 			status: "Zobrazit aktuální stav, model a statistiky rozhodování",
@@ -101,6 +197,7 @@ const STRINGS: Record<Locale, SystemOneStrings> = {
 			test: "Spustit živý test směrování nástrojů na zadaném promptu",
 			stats: "Správa statistik rozhodování (reset)",
 			lang: "Změnit jazyk rozhraní (en | cs)",
+			debug: "Přepnout debug HUD widget se vstupem/výstupem klasifikátoru (on | off)",
 		},
 	},
 };

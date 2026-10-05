@@ -139,6 +139,7 @@ export async function classifyToolSelection(
 	const supporting = result.answers.supporting_tool;
 
 	const needsTools = needs?.type === "bool" ? needs.probability >= 0.5 : true;
+	const needsToolsProbability = needs?.type === "bool" ? needs.probability : needsTools ? 1 : 0;
 	const primaryTool =
 		primary?.type === "choice" && primary.choice !== NO_TOOL_KEY ? primary.choice : undefined;
 	const confidence = primary?.type === "choice" ? primary.confidence : 0;
@@ -151,6 +152,7 @@ export async function classifyToolSelection(
 
 	return {
 		needsTools,
+		needsToolsProbability,
 		primaryTool,
 		supportingTool,
 		confidence,

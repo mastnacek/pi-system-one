@@ -19,6 +19,8 @@ export interface SystemOneConfig {
 	confidenceThreshold: number;
 	/** Whether to show a non-intrusive UI notification on preflight decisions */
 	showNotification: boolean;
+	/** Whether the debug HUD widget (classifier input/output) is displayed above the editor */
+	debugHud: boolean;
 }
 
 export interface SystemOneStats {
@@ -47,6 +49,8 @@ export interface ToolCandidate {
 export interface ToolSelectionResult {
 	/** Whether the classifier believes any tool call is needed at all. */
 	needsTools: boolean;
+	/** Raw probability of the needs_tools bool answer [0.0 - 1.0]. */
+	needsToolsProbability: number;
 	/** The tool the agent should call first (undefined = answer directly). */
 	primaryTool?: string;
 	/** A complementary second tool, when one was selected. */
@@ -56,4 +60,44 @@ export interface ToolSelectionResult {
 	/** Probability distribution over the primary_tool candidates. */
 	probabilities: Record<string, number>;
 	metric: ClassificationMetric;
+}
+
+/** Where a debug snapshot originated. */
+export type DebugSource = "preflight" | "test";
+
+/** Why a classification did NOT result in an injected guideline. */
+export type DebugSkipReason =
+	| "no-tool-needed"
+	| "below-threshold"
+	| "classifier-unavailable"
+	| "no-candidates"
+	| "error";
+
+/**
+ * One full classifier round-trip captured for the debug HUD: exactly what was
+ * sent to the System One model (prompt, tool candidates, questions) and what
+ * came back (selection, probabilities, latency, cost).
+ */
+export interface DebugSnapshot {
+	source: DebugSource;
+	timestamp: number;
+	/** The prompt text sent in the classifier state (already truncated). */
+	prompt: string;
+	/** Number of tool candidates offered as choice criteria. */
+	candidateCount: number;
+	/** Candidate tool names (descriptions omitted — too long for the HUD). */
+	candidateNames: string[];
+	/** Compact description of the three classifier questions. */
+	questionSummary: string;
+	needsToolsProbability?: number;
+	primaryTool?: string;
+	primaryConfidence?: number;
+	supportingTool?: string;
+	/** Probability distribution over primary_tool candidates. */
+	probabilities: Record<string, number>;
+	/** Whether a routing guideline was injected into the system prompt. */
+	injected: boolean;
+	skipReason?: DebugSkipReason;
+	errorMessage?: string;
+	metric?: ClassificationMetric;
 }

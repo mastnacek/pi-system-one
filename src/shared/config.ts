@@ -22,6 +22,7 @@ export function getDefaultConfig(): SystemOneConfig {
 		preferredProvider: "openrouter",
 		confidenceThreshold: 0.65,
 		showNotification: true,
+		debugHud: false,
 	};
 }
 
