@@ -5,7 +5,7 @@
  * Model-facing text (descriptions and return values) remains English in all locales.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionToolContext } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { evaluateSafety, runClassification } from "../../shared/classifier.js";
@@ -33,7 +33,7 @@ export function registerTools(pi: ExtensionAPI, state: PluginState): void {
 				{ description: "Map of question_id to typed question definition" },
 			),
 		}),
-		async execute(_toolCallId, params, ctx) {
+		async execute(_toolCallId, params, signal, _onUpdate, ctx: ExtensionToolContext) {
 			try {
 				const { result, metric } = await runClassification(
 					ctx.modelRegistry,
@@ -42,6 +42,7 @@ export function registerTools(pi: ExtensionAPI, state: PluginState): void {
 						state: params.state as Record<string, unknown>,
 						questions: params.questions as any,
 					},
+					signal,
 				);
 
 				state.recordClassification(metric);
@@ -94,7 +95,7 @@ export function registerTools(pi: ExtensionAPI, state: PluginState): void {
 				description: "Key-value dictionary of option_name -> description of what it does",
 			}),
 		}),
-		async execute(_toolCallId, params, ctx) {
+		async execute(_toolCallId, params, signal, _onUpdate, ctx: ExtensionToolContext) {
 			try {
 				const { result, metric } = await runClassification(
 					ctx.modelRegistry,
@@ -109,6 +110,7 @@ export function registerTools(pi: ExtensionAPI, state: PluginState): void {
 							},
 						},
 					},
+					signal,
 				);
 
 				const answer = result.answers.route;
@@ -157,9 +159,9 @@ export function registerTools(pi: ExtensionAPI, state: PluginState): void {
 		parameters: Type.Object({
 			command: Type.String({ description: "The shell or git command to evaluate" }),
 		}),
-		async execute(_toolCallId, params, ctx) {
+		async execute(_toolCallId, params, signal, _onUpdate, ctx: ExtensionToolContext) {
 			try {
-				const evaluation = await evaluateSafety(ctx.modelRegistry, state.config, params.command);
+				const evaluation = await evaluateSafety(ctx.modelRegistry, state.config, params.command, signal);
 				state.recordClassification(evaluation.metric);
 
 				return {
