@@ -143,3 +143,36 @@ test("/system-one test runs test prompt", async () => {
 	assert.ok(notifications.some((n) => n.includes("code_navigation")));
 	fs.rmSync(tmpDir, { recursive: true, force: true });
 });
+
+test("argument completions close on free-form 'test ' inputs to allow Enter submission", () => {
+	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-cmds-"));
+	const { api, commands } = createMockExtensionAPI();
+	const state = createInitialState(tmpDir);
+	registerCommands(api, state);
+
+	const cmd = commands.get("system-one");
+
+	// 1. Partial "te" offers "test "
+	const partial = cmd.getArgumentCompletions("te");
+	assert.ok(partial && partial.length > 0);
+	assert.equal(partial[0].value, "test ");
+
+	// 2. Exact "test" without trailing space offers "test "
+	const exact = cmd.getArgumentCompletions("test");
+	assert.ok(exact && exact.length > 0);
+	assert.equal(exact[0].value, "test ");
+
+	// 3. "test " with trailing space closes autocomplete so Enter submits
+	const trailing = cmd.getArgumentCompletions("test ");
+	assert.equal(trailing, null);
+
+	// 4. "test with prompt" returns null so user can type and submit
+	const withPrompt = cmd.getArgumentCompletions("test how to do x");
+	assert.equal(withPrompt, null);
+
+	// 5. "mode " returns mode options
+	const modeCompletions = cmd.getArgumentCompletions("mode ");
+	assert.ok(modeCompletions && modeCompletions.length === 3);
+
+	fs.rmSync(tmpDir, { recursive: true, force: true });
+});

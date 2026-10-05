@@ -87,7 +87,9 @@ export function registerCommands(pi: ExtensionAPI, state: PluginState): void {
 		}
 
 		if (sub === "test") {
-			const testPrompt = tokens.slice(1).join(" ") || "Find all occurrences of user auth verification in the codebase";
+			const testPrompt =
+				args.trim().slice("test".length).trim() ||
+				"Find all occurrences of user auth verification in the codebase";
 			if (ctx.hasUI) ctx.ui.notify(s.testRunning, "info");
 
 			try {
@@ -143,13 +145,21 @@ function buildCompletions(
 	state: PluginState,
 ): { value: string; label: string; description: string }[] | null {
 	const text = prefix.trimStart();
-	const tokens = text.split(/\s+/);
-	const head = tokens[0]?.toLowerCase() ?? "";
+	const tokens = text.split(/\s+/).filter(Boolean);
+	const trailingSpace = /\s$/.test(prefix);
+	const firstToken = tokens[0]?.toLowerCase() ?? "";
 	const s = stringsFor(state.config.lang);
 
-	// Subcommand completions for mode
-	if (head === "mode" || (tokens.length >= 2 && tokens[0]?.toLowerCase() === "mode")) {
-		const typed = text.slice("mode".length).trim().toLowerCase();
+	// Free-form subcommands (test takes an arbitrary prompt):
+	// As soon as the user typed "test " or has typed words after "test", close completions
+	// so Enter key submits the command instead of accepting autocomplete.
+	if (firstToken === "test" && (trailingSpace || tokens.length > 1)) {
+		return null;
+	}
+
+	// 2nd level: mode
+	if (firstToken === "mode" && (trailingSpace || tokens.length > 1)) {
+		const typed = (tokens.length > 1 ? tokens.slice(1).join(" ") : "").toLowerCase();
 		return MODES.map((m) => ({
 			value: `mode ${m}`,
 			label: state.config.mode === m ? `${m} ✓` : m,
@@ -157,9 +167,9 @@ function buildCompletions(
 		})).filter((row) => row.value.toLowerCase().startsWith(`mode ${typed}`));
 	}
 
-	// Subcommand completions for notify
-	if (head === "notify" || (tokens.length >= 2 && tokens[0]?.toLowerCase() === "notify")) {
-		const typed = text.slice("notify".length).trim().toLowerCase();
+	// 2nd level: notify
+	if (firstToken === "notify" && (trailingSpace || tokens.length > 1)) {
+		const typed = (tokens.length > 1 ? tokens.slice(1).join(" ") : "").toLowerCase();
 		const opts = ["on", "off"] as const;
 		return opts
 			.map((o) => {
@@ -173,14 +183,17 @@ function buildCompletions(
 			.filter((row) => row.value.toLowerCase().startsWith(`notify ${typed}`));
 	}
 
-	// Subcommand completions for stats
-	if (head === "stats" || (tokens.length >= 2 && tokens[0]?.toLowerCase() === "stats")) {
-		return [{ value: "stats reset", label: "reset", description: "Reset classification metrics" }];
+	// 2nd level: stats
+	if (firstToken === "stats" && (trailingSpace || tokens.length > 1)) {
+		const typed = (tokens.length > 1 ? tokens.slice(1).join(" ") : "").toLowerCase();
+		return [{ value: "stats reset", label: "reset", description: "Reset classification metrics" }].filter((row) =>
+			row.value.toLowerCase().startsWith(`stats ${typed}`),
+		);
 	}
 
-	// Subcommand completions for lang
-	if (head === "lang" || (tokens.length >= 2 && tokens[0]?.toLowerCase() === "lang")) {
-		const typed = text.slice("lang".length).trim().toLowerCase();
+	// 2nd level: lang
+	if (firstToken === "lang" && (trailingSpace || tokens.length > 1)) {
+		const typed = (tokens.length > 1 ? tokens.slice(1).join(" ") : "").toLowerCase();
 		return LOCALES.map((loc) => ({
 			value: `lang ${loc}`,
 			label: state.config.lang === loc ? `${loc} ✓` : loc,
@@ -188,7 +201,13 @@ function buildCompletions(
 		})).filter((row) => row.value.toLowerCase().startsWith(`lang ${typed}`));
 	}
 
-	// Top-level subcommands
+	// If there are multiple tokens and none of the above subcommands matched, return null
+	if (tokens.length > 1) {
+		return null;
+	}
+
+	// 1st level (top-level subcommands)
+	const typed = (tokens[0] ?? "").toLowerCase();
 	const rows = [
 		{ value: "status", label: "status", description: s.cmdDesc.status },
 		{ value: "mode ", label: "mode", description: `${s.cmdDesc.mode} [${state.config.mode}]` },
@@ -198,5 +217,6 @@ function buildCompletions(
 		{ value: "lang ", label: "lang", description: `${s.cmdDesc.lang} [${state.config.lang}]` },
 	];
 
-	return rows.filter((r) => r.value.toLowerCase().startsWith(head));
+	const filtered = rows.filter((r) => r.value.trim().toLowerCase().startsWith(typed));
+	return filtered.length > 0 ? filtered : null;
 }
