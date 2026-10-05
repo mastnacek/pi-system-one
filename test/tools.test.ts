@@ -92,7 +92,7 @@ function createMockToolContext(classifyResponse?: any): ExtensionToolContext {
 test("registerTools registers all 4 tools", () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-tools-"));
 	const { api, tools } = createMockExtensionAPI();
-	const state = createInitialState(tmpDir);
+	const state = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	registerTools(api, state);
 
 	assert.ok(tools.has("system_one_classify"));
@@ -105,7 +105,7 @@ test("registerTools registers all 4 tools", () => {
 test("system_one_status executes without error", async () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-tools-"));
 	const { api, tools } = createMockExtensionAPI();
-	const state = createInitialState(tmpDir);
+	const state = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	registerTools(api, state);
 
 	const statusTool = tools.get("system_one_status");
@@ -120,7 +120,7 @@ test("system_one_status executes without error", async () => {
 test("system_one_classify executes with mock context", async () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-tools-"));
 	const { api, tools } = createMockExtensionAPI();
-	const state = createInitialState(tmpDir);
+	const state = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	registerTools(api, state);
 
 	const classifyTool = tools.get("system_one_classify");
@@ -152,7 +152,7 @@ test("system_one_classify executes with mock context", async () => {
 test("system_one_route selects the candidate successfully", async () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-tools-"));
 	const { api, tools } = createMockExtensionAPI();
-	const state = createInitialState(tmpDir);
+	const state = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	registerTools(api, state);
 
 	const routeTool = tools.get("system_one_route");
@@ -180,7 +180,7 @@ test("system_one_route selects the candidate successfully", async () => {
 test("system_one_safety evaluates command correctly", async () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-tools-"));
 	const { api, tools } = createMockExtensionAPI();
-	const state = createInitialState(tmpDir);
+	const state = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	registerTools(api, state);
 
 	const safetyTool = tools.get("system_one_safety");

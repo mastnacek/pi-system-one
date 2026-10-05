@@ -11,13 +11,31 @@ import type { ToolCandidate } from "./types.js";
 const SELF_PREFIX = "system_one_";
 
 /**
- * Wire-safe cap on choice-criteria size. The typesafe-system-one transport imposes no
- * client-side limit, but llama-cpp-classify supports at most 62 choice options.
+ * Wire-safe cap on choice-criteria size for the classifier.
+ * Sized to accommodate rich sessions with multiple MCP servers (90+ tools); a
+ * smaller cap silently drops MCP tools and makes them unroutable. Note that
+ * `llama-cpp-classify` backends only support 62 choice options, so a session
+ * routed to one needs an accordingly smaller active tool set.
  */
-const MAX_TOOL_CANDIDATES = 62;
+const MAX_TOOL_CANDIDATES = 128;
 
-/** Long tool descriptions would blow up the 32K classifier context window. */
+/** Long tool descriptions would blow up the classifier context window. */
 const MAX_DESCRIPTION_CHARS = 200;
+
+/**
+ * Clean and summarize a tool description for the classifier prompt.
+ * MCP tool descriptions are multi-line prose; collapsing whitespace and
+ * front-loading the domain keywords keeps the choice criteria legible to a
+ * non-conversational classifier (e.g. that the knowledge base covers Lotus Notes).
+ */
+function cleanToolDescription(name: string, rawDescription?: string): string {
+	const text = (rawDescription ?? name).replace(/\s+/g, " ").trim();
+	if (name.includes("knowledge_base")) {
+		const hint = "Local documentation knowledge base covering Domino/LotusScript (lotus-notes collection), APIs and guides.";
+		return `${hint} ${text}`.slice(0, MAX_DESCRIPTION_CHARS);
+	}
+	return text.slice(0, MAX_DESCRIPTION_CHARS);
+}
 
 /**
  * Collect the tools currently declared to the model (`getActiveTools`) with their
@@ -44,6 +62,6 @@ export function collectToolCandidates(
 		.slice(0, MAX_TOOL_CANDIDATES)
 		.map((t) => ({
 			name: t.name,
-			description: (t.description ?? t.name).slice(0, MAX_DESCRIPTION_CHARS),
+			description: cleanToolDescription(t.name, t.description),
 		}));
 }

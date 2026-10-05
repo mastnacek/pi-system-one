@@ -10,7 +10,7 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { classifyToolSelection } from "../../shared/classifier.js";
+import { classifyToolSelection, decideRoutingOutcome } from "../../shared/classifier.js";
 import { publishDebugHud, snapshotFromError, snapshotFromSelection } from "../../shared/debug-hud.js";
 import { stringsFor } from "../../shared/i18n.js";
 import type { PluginState } from "../../shared/state.js";
@@ -91,20 +91,21 @@ export function registerPreflight(pi: ExtensionAPI, state: PluginState): () => v
 
 			state.recordClassification(selection.metric, selection.primaryTool, selection.confidence);
 
-			// Decide whether the guideline is injected.
-			let injected = false;
-			let skipReason: DebugSnapshot["skipReason"];
-			if (!selection.needsTools || !selection.primaryTool) {
-				skipReason = "no-tool-needed";
-			} else if (selection.confidence < state.config.confidenceThreshold) {
-				skipReason = "below-threshold";
-			} else {
-				injected = true;
-			}
+			// Decide whether the guideline is injected (primary-tool sentinel + confidence).
+			const outcome = decideRoutingOutcome(selection, state.config.confidenceThreshold);
 
-			publish(snapshotFromSelection("preflight", trimmed, tools, selection, injected, skipReason));
+			publish(
+				snapshotFromSelection(
+					"preflight",
+					trimmed,
+					tools,
+					selection,
+					outcome.injected,
+					outcome.skipReason,
+				),
+			);
 
-			if (!injected || !selection.primaryTool) {
+			if (!outcome.injected || !outcome.primaryTool) {
 				return;
 			}
 
@@ -114,9 +115,9 @@ export function registerPreflight(pi: ExtensionAPI, state: PluginState): () => v
 			if (state.config.showNotification && ctx.hasUI) {
 				ctx.ui.notify(
 					s.routeNotification(
-						selection.primaryTool,
-						selection.supportingTool,
-						selection.confidence,
+						outcome.primaryTool,
+						outcome.supportingTool,
+						outcome.confidence,
 						selection.metric.durationMs,
 					),
 					"info",
@@ -125,7 +126,7 @@ export function registerPreflight(pi: ExtensionAPI, state: PluginState): () => v
 
 			// 2. Inject the concrete tool selection into the system prompt guidelines
 			event.systemPromptOptions.promptGuidelines.push(
-				buildRoutingGuideline(selection.primaryTool, selection.supportingTool, selection.confidence),
+				buildRoutingGuideline(outcome.primaryTool, outcome.supportingTool, outcome.confidence),
 			);
 		} catch (err) {
 			publish(snapshotFromError("preflight", trimmed, tools, err));

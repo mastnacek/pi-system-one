@@ -7,7 +7,7 @@ import { createInitialState } from "../src/shared/state.js";
 
 test("state kernel initializes with defaults and updates correctly", () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-starter-"));
-	const st = createInitialState(tmpDir);
+	const st = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	assert.equal(st.config.enabled, true);
 	assert.equal(st.config.mode, "auto");
 	assert.equal(st.stats.totalClassifications, 0);

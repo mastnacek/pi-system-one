@@ -5,7 +5,7 @@
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { classifyToolSelection } from "../../shared/classifier.js";
+import { classifyToolSelection, decideRoutingOutcome } from "../../shared/classifier.js";
 import {
 	clearDebugHud,
 	publishDebugHud,
@@ -127,14 +127,16 @@ export function registerCommands(pi: ExtensionAPI, state: PluginState): void {
 
 				state.recordClassification(selection.metric, selection.primaryTool, selection.confidence);
 
-				// Capture the round-trip for the debug HUD (test never injects guidelines).
+				// Capture the round-trip for the debug HUD. `test` never injects guidelines, but the
+				// HUD reports whether the preflight WOULD have injected one, and why not.
+				const outcome = decideRoutingOutcome(selection, state.config.confidenceThreshold);
 				const snapshot = snapshotFromSelection(
 					"test",
 					testPrompt,
 					tools,
 					selection,
-					false,
-					selection.needsTools && selection.primaryTool ? undefined : "no-tool-needed",
+					outcome.injected,
+					outcome.skipReason,
 				);
 				state.lastDebug = snapshot;
 				if (state.config.debugHud) {

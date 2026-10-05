@@ -78,7 +78,7 @@ function createMockCommandContext(notifyMessages: string[] = [], cwd: string = p
 test("registerCommands registers /system-one and /s1", () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-cmds-"));
 	const { api, commands } = createMockExtensionAPI();
-	const state = createInitialState(tmpDir);
+	const state = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	registerCommands(api, state);
 
 	assert.ok(commands.has("system-one"));
@@ -89,7 +89,7 @@ test("registerCommands registers /system-one and /s1", () => {
 test("/system-one status displays status notification", async () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-cmds-"));
 	const { api, commands } = createMockExtensionAPI();
-	const state = createInitialState(tmpDir);
+	const state = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	registerCommands(api, state);
 
 	const notifications: string[] = [];
@@ -105,7 +105,7 @@ test("/system-one status displays status notification", async () => {
 test("/system-one mode changes mode", async () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-cmds-"));
 	const { api, commands } = createMockExtensionAPI();
-	const state = createInitialState(tmpDir);
+	const state = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	registerCommands(api, state);
 
 	const notifications: string[] = [];
@@ -121,7 +121,7 @@ test("/system-one mode changes mode", async () => {
 test("/system-one notify toggles notifications", async () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-cmds-"));
 	const { api, commands } = createMockExtensionAPI();
-	const state = createInitialState(tmpDir);
+	const state = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	registerCommands(api, state);
 
 	const notifications: string[] = [];
@@ -136,7 +136,7 @@ test("/system-one notify toggles notifications", async () => {
 test("/system-one lang changes locale", async () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-cmds-"));
 	const { api, commands } = createMockExtensionAPI();
-	const state = createInitialState(tmpDir);
+	const state = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	registerCommands(api, state);
 
 	const notifications: string[] = [];
@@ -151,7 +151,7 @@ test("/system-one lang changes locale", async () => {
 test("/system-one debug toggles the HUD flag and persists", async () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-cmds-"));
 	const { api, commands } = createMockExtensionAPI();
-	const state = createInitialState(tmpDir);
+	const state = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	registerCommands(api, state);
 
 	const notifications: string[] = [];
@@ -169,7 +169,7 @@ test("/system-one debug toggles the HUD flag and persists", async () => {
 test("/system-one test runs test prompt", async () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-cmds-"));
 	const { api, commands } = createMockExtensionAPI();
-	const state = createInitialState(tmpDir);
+	const state = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	registerCommands(api, state);
 
 	const notifications: string[] = [];
@@ -192,7 +192,7 @@ test("/system-one test runs test prompt", async () => {
 test("argument completions close on free-form 'test ' inputs to allow Enter submission", () => {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sys1-cmds-"));
 	const { api, commands } = createMockExtensionAPI();
-	const state = createInitialState(tmpDir);
+	const state = createInitialState(tmpDir, path.join(tmpDir, "global-pi-system-one.json"));
 	registerCommands(api, state);
 
 	const cmd = commands.get("system-one");

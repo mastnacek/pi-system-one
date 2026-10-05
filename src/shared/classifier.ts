@@ -9,7 +9,13 @@
 
 import type { ClassifierContext, ClassifierModel, ClassifierResult } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
-import type { ClassificationMetric, SystemOneConfig, ToolCandidate, ToolSelectionResult } from "./types.js";
+import type {
+	ClassificationMetric,
+	DebugSkipReason,
+	SystemOneConfig,
+	ToolCandidate,
+	ToolSelectionResult,
+} from "./types.js";
 
 const CLASSIFIER_FALLBACKS = [
 	{ provider: "openrouter", model: "typesafe/jev-1.13" },
@@ -110,9 +116,12 @@ export async function classifyToolSelection(
 				type: "choice",
 				instructions:
 					"Which single tool should the coding agent call FIRST to best fulfill the user's request? " +
-					`Choose ${NO_TOOL_KEY} only when no listed tool is useful for this request.`,
+					"For questions about a specific platform, product, API or framework (LotusScript, Domino, Pi, Herdr, ...), " +
+					"prefer the tool that retrieves authoritative documentation or source over answering from memory. " +
+					`Choose ${NO_TOOL_KEY} only when no listed tool would materially improve the answer.`,
 				criteria: {
-					[NO_TOOL_KEY]: "No tool is needed; answer directly from knowledge",
+					[NO_TOOL_KEY]:
+						"Answer directly from model knowledge — use only for general concepts that need no project or documentation lookup",
 					...toolCriteria,
 				},
 			},
@@ -158,6 +167,46 @@ export async function classifyToolSelection(
 		confidence,
 		probabilities: primary?.type === "choice" ? primary.probabilities : {},
 		metric,
+	};
+}
+
+/** The routing outcome for one selection: inject the guideline, or why not. */
+export interface RoutingOutcome {
+	injected: boolean;
+	skipReason?: DebugSkipReason;
+	primaryTool?: string;
+	supportingTool?: string;
+	confidence: number;
+}
+
+/**
+ * Decide whether a selection becomes an injected guideline.
+ *
+ * The decision rests on the `primary_tool` choice and its confidence, NOT on the
+ * `needs_tools` bool: JEV answers that bool conservatively (measured 0.35–0.46 for
+ * prompts whose primary tool scored 0.91), so gating on it suppressed valid routing.
+ * The `answer_directly` sentinel already expresses "no tool", and primary confidence
+ * is the signal that actually separates certain from uncertain picks. `needs_tools`
+ * stays in the result as a diagnostic for the debug HUD.
+ */
+export function decideRoutingOutcome(selection: ToolSelectionResult, confidenceThreshold: number): RoutingOutcome {
+	if (!selection.primaryTool) {
+		return { injected: false, skipReason: "no-tool-needed", confidence: selection.confidence };
+	}
+	if (selection.confidence < confidenceThreshold) {
+		return {
+			injected: false,
+			skipReason: "below-threshold",
+			primaryTool: selection.primaryTool,
+			supportingTool: selection.supportingTool,
+			confidence: selection.confidence,
+		};
+	}
+	return {
+		injected: true,
+		primaryTool: selection.primaryTool,
+		supportingTool: selection.supportingTool,
+		confidence: selection.confidence,
 	};
 }
 

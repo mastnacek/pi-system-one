@@ -116,17 +116,29 @@ pi-system-one/
 user prompt
   → collectToolCandidates(pi)          # getAllTools() ∩ getActiveTools(), minus system_one_*
   → classifyToolSelection(...)         # one classifier call, three questions:
-  │     needs_tools     (bool)         #   is any tool call needed at all?
+  │     needs_tools     (bool)         #   diagnostic only — JEV answers it conservatively
   │     primary_tool    (choice)       #   which tool to call FIRST (+ answer_directly sentinel)
   │     supporting_tool (choice)       #   complementary second tool (+ none sentinel)
-  → if confident (≥ confidenceThreshold):
+  → decideRoutingOutcome(...)          # primary tool present AND confidence ≥ threshold
         systemPromptOptions.promptGuidelines.push(
           "System One tool routing: call `kb_search` first, then `read` …")
         + optional UI notification
 ```
 
-Sentinel choices (`answer_directly`, `none`) let the classifier explicitly decline tool use,
-so conversational prompts are left untouched.
+The **entire active tool list** is offered as choice criteria — the collector caps at 128 candidates
+specifically so a session with many MCP servers keeps every tool routable (a smaller cap silently
+dropped `mcp__knowledge_base__kb_search`, making the `lotus-notes` collection unreachable).
+
+**Routing policy:** for questions about a specific platform, product, API or framework
+(LotusScript, Domino, Pi, Herdr, …) the classifier is instructed to prefer the tool that retrieves
+authoritative documentation or source over answering from model memory. General programming
+concepts still resolve to `answer_directly`.
+
+**Decision signal:** injection is decided by the `primary_tool` choice and its confidence. The
+`needs_tools` bool is recorded for the debug HUD but is **not** a gate — measured JEV behaviour
+returns it as low as 0.35–0.46 for prompts whose primary tool scored 0.91, so gating on it
+suppressed valid routing. Sentinel choices (`answer_directly`, `none`) let the classifier decline
+tool use explicitly, so conversational prompts are left untouched.
 
 ---
 

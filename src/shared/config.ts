@@ -26,7 +26,8 @@ export function getDefaultConfig(): SystemOneConfig {
 	};
 }
 
-export function getGlobalConfigPath(): string {
+export function getGlobalConfigPath(globalFile?: string): string {
+	if (globalFile) return globalFile;
 	const home = os.homedir();
 	return path.join(home, ".pi", "agent", CONFIG_FILE_NAME);
 }
@@ -35,13 +36,13 @@ export function getProjectConfigPath(cwd: string = process.cwd()): string {
 	return path.join(cwd, ".pi", CONFIG_FILE_NAME);
 }
 
-export function loadConfig(cwd: string = process.cwd()): SystemOneConfig {
+export function loadConfig(cwd: string = process.cwd(), globalFile?: string): SystemOneConfig {
 	const defaults = getDefaultConfig();
 	let globalConfig: Partial<SystemOneConfig> = {};
 	let projectConfig: Partial<SystemOneConfig> = {};
 
 	try {
-		const gPath = getGlobalConfigPath();
+		const gPath = getGlobalConfigPath(globalFile);
 		if (fs.existsSync(gPath)) {
 			globalConfig = JSON.parse(fs.readFileSync(gPath, "utf-8"));
 		}
@@ -65,9 +66,14 @@ export function loadConfig(cwd: string = process.cwd()): SystemOneConfig {
 	};
 }
 
-export function saveConfig(config: SystemOneConfig, isGlobal: boolean = false, cwd: string = process.cwd()): void {
+export function saveConfig(
+	config: SystemOneConfig,
+	isGlobal: boolean = false,
+	cwd: string = process.cwd(),
+	globalFile?: string,
+): void {
 	try {
-		const filePath = isGlobal ? getGlobalConfigPath() : getProjectConfigPath(cwd);
+		const filePath = isGlobal ? getGlobalConfigPath(globalFile) : getProjectConfigPath(cwd);
 		const dir = path.dirname(filePath);
 		if (!fs.existsSync(dir)) {
 			fs.mkdirSync(dir, { recursive: true });

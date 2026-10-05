@@ -16,8 +16,8 @@ export interface PluginState {
 	resetStats(): void;
 }
 
-export function createInitialState(cwd?: string): PluginState {
-	const config = loadConfig(cwd);
+export function createInitialState(cwd?: string, globalFile?: string): PluginState {
+	const config = loadConfig(cwd, globalFile);
 	const stats: SystemOneStats = {
 		totalClassifications: 0,
 		totalCostUsd: 0,
@@ -30,7 +30,7 @@ export function createInitialState(cwd?: string): PluginState {
 		stats,
 		updateConfig(patch: Partial<SystemOneConfig>, isGlobal: boolean = false, workingDir?: string): void {
 			Object.assign(this.config, patch);
-			saveConfig(this.config, isGlobal, workingDir);
+			saveConfig(this.config, isGlobal, workingDir, globalFile);
 		},
 		recordClassification(metric: ClassificationMetric, domain?: string, confidence?: number): void {
 			this.stats.totalClassifications += 1;
